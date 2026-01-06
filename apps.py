@@ -14,7 +14,8 @@ def configure_gemini(api_key):
     """Configure Gemini API"""
     try:
         import google.generativeai as genai
-        genai.configure(llm_workover=api_key)
+        api_key = st.secrets.get("llm_workover", os.getenv("llm_workover"))
+        genai.configure(api_key=api_key)
         return True
     except Exception as e:
         st.error(f"Error configuring Gemini: {str(e)}")
