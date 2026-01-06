@@ -254,3 +254,33 @@ def display_efficiency_analysis(efficiency):
 
 # Update Config class with additional constants
 Config.INPUT_FORMAT_GUIDE = """**Format yang didukung:**
+WaktuMulai WaktuAkhir Durasi Peralatan&Deskripsi Interval/Kedalaman Kondisi/Hasil
+06:00 09:00 3.0 Lanjutkan BAILING... B.O.S F/ 611'... Pekerjaan terhenti..."""
+
+Config.EXAMPLE_INPUT = """Contoh:
+06:0009:003.0Lanjutkan BAILING OF SAND (B.O.S.). L/D 3-3/4" SAND PUMP.B.O.S F/ 611' TO 618'Pekerjaan terhenti (sand pump not go down).
+09:0010:001.0M/U & RIH W/ 3-1/2" M.SHOE ON 23 JTS 3.5" TBG.Tagged @ 618' (TOS)Kedalaman awal Top of Sand (TOS).
+"""
+
+Config.EXAMPLE_CODE = """06:00 09:00 3.0
+Lanjutkan BAILING OF SAND (B.O.S.)
+L/D 3-3/4" SAND PUMP.
+B.O.S F/ 611' TO 618'
+Pekerjaan terhenti"""
+
+Config.TIPS = """1. Tempel data langsung dari laporan
+2. Pastikan format waktu konsisten
+3. Gunakan AI untuk parsing kompleks
+4. Periksa hasil parsing di tab berikutnya"""
+
+Config.TABLE_COLUMN_CONFIG = {
+    "Waktu Mulai": st.column_config.TextColumn(width="small"),
+    "Waktu Akhir": st.column_config.TextColumn(width="small"),
+    "Durasi (Jam)": st.column_config.NumberColumn(width="small", format="%.1f"),
+    "Peralatan Utama & Deskripsi Operasi": st.column_config.TextColumn(width="large"),
+    "Interval/Kedalaman Operasi": st.column_config.TextColumn(width="medium"),
+    "Kondisi Awal/Hasil Utama": st.column_config.TextColumn(width="large")
+}
+
+if __name__ == "__main__":
+    main()
