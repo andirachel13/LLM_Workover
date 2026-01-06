@@ -10,7 +10,7 @@ class AIParser:
 
     def __init__(self, api_key: str = None):
         if api_key:
-            genai.configure(llm_workover=api_key)
+            genai.configure(api_key=api_key)
 
     def parse_row(self, row: str) -> Optional[Dict]:
         """Parse a single row using AI"""
