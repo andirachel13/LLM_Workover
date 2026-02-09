@@ -4,11 +4,11 @@ import streamlit as st
 from datetime import datetime
 
 from config import Config
-from processors.data_processor import DataProcessor
-from analytics.analyzer import DataAnalyzer
-from exports.csv_exporter import CSVExporter
-from exports.excel_exporter import ExcelExporter
-from exports.json_exporter import JSONExporter
+from data_processor import DataProcessor
+from analyzer import DataAnalyzer
+from csv_exporter import CSVExporter
+#from excel_exporter import ExcelExporter
+#from json_exporter import JSONExporter
 
 def configure_gemini(api_key):
     """Configure Gemini API"""
