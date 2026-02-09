@@ -2,7 +2,7 @@
 
 import pandas as pd
 from datetime import datetime
-from ..config import Config
+from config import Config
 
 class CSVExporter:
     """Export data to CSV format"""
