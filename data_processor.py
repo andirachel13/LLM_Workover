@@ -1,9 +1,8 @@
 # processors/data_processor.py
-
 import re
 from typing import List, Dict
-from ..parsers.ai_parser import AIParser
-from ..parsers.rule_parser import RuleParser
+from parsers.ai_parser import AIParser
+from parsers.rule_parser import RuleParser
 
 class DataProcessor:
     """Main data processing class"""
