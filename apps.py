@@ -5,7 +5,7 @@ from datetime import datetime
 
 from config import Config
 from data_processor import DataProcessor
-from analyzer import DataAnalyzer
+from analytics import DataAnalyzer
 from csv_exporter import CSVExporter
 #from excel_exporter import ExcelExporter
 #from json_exporter import JSONExporter
