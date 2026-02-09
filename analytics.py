@@ -1,7 +1,7 @@
 # analytics/analyzer.py
 
 from typing import Dict, List
-from ..config import Config
+from config import Config
 
 class DataAnalyzer:
     """Analyze drilling workover data"""
