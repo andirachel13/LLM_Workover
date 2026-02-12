@@ -186,7 +186,7 @@ def display_export_options():
     # CSV Exporter (always available)
     with col1:
         csv_export = CSVExporter()
-        csv_data, filename = csv_exporter.export(st.session_state.processed_data)
+        csv_data, filename = csv_export.export(st.session_state.processed_data)
         st.download_button(
             label="📥 Download CSV",
             data=csv_data,
