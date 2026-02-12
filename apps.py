@@ -180,13 +180,13 @@ def render_export_tab():
         st.info("Belum ada data untuk diekspor.")
 
 def display_export_options():
-    """Display export options"""
+    """Display export options with conditional availability"""
     col1, col2, col3 = st.columns(3)
 
+    # CSV Exporter (always available)
     with col1:
-        csv_exporter = CSVExporter()
+        csv_export = CSVExporter()
         csv_data, filename = csv_exporter.export(st.session_state.processed_data)
-
         st.download_button(
             label="📥 Download CSV",
             data=csv_data,
@@ -195,29 +195,37 @@ def display_export_options():
             use_container_width=True
         )
 
+    # Excel Exporter (check if available)
     with col2:
-        excel_exporter = ExcelExporter()
-        excel_data, filename = excel_exporter.export(st.session_state.processed_data)
+        try:
+            from excel_export import ExcelExporter
+            excel_exporter = ExcelExporter()
+            excel_data, filename = excel_exporter.export(st.session_state.processed_data)
+            st.download_button(
+                label="📊 Download Excel",
+                data=excel_data,
+                file_name=filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        except ImportError:
+            st.button("📊 Excel (Coming Soon)", disabled=True, use_container_width=True)
 
-        st.download_button(
-            label="📊 Download Excel",
-            data=excel_data,
-            file_name=filename,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
-
+    # JSON Exporter (check if available)
     with col3:
-        json_exporter = JSONExporter()
-        json_data, filename = json_exporter.export(st.session_state.processed_data)
-
-        st.download_button(
-            label="📄 Download JSON",
-            data=json_data,
-            file_name=filename,
-            mime="application/json",
-            use_container_width=True
-        )
+        try:
+            from json_exporter import JSONExporter
+            json_exporter = JSONExporter()
+            json_data, filename = json_exporter.export(st.session_state.processed_data)
+            st.download_button(
+                label="📄 Download JSON",
+                data=json_data,
+                file_name=filename,
+                mime="application/json",
+                use_container_width=True
+            )
+        except ImportError:
+            st.button("📄 JSON (Coming Soon)", disabled=True, use_container_width=True)
 
 # Add missing functions
 def render_tips():
