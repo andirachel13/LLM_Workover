@@ -1,4 +1,5 @@
 # processors/data_processor.py
+
 import re
 from typing import List, Dict
 from parser import AIParser
@@ -16,23 +17,23 @@ class DataProcessor:
     def process_raw_data(self, raw_text: str) -> List[Dict]:
         """Process raw text data into structured format"""
         
-        # --- LANGKAH BARU: BERSIHKAN DATA MENTAH DARI KARAKTER SAMPAH ---
-        # 1. Hapus karakter ; (titik koma) dan | (pipe) dari seluruh teks
+        # 1. BERSIHKAN KARAKTER SAMPAH
         raw_text = raw_text.replace(';', ' ')
         raw_text = raw_text.replace('|', ' ')
-        
-        # 2. Hapus karakter koma (,) yang berada di pertengahan kalimat Deskripsi (selain pada data hasil 'WATER, OIL')
-        # Kita menggunakan Regex agar tidak menghapus koma pada data angka/formula (seperti IFL, SD, WATER)
         raw_text = re.sub(r'(?<!\d),(?!\s*\d+%)', ' ', raw_text)
-        
-        # 3. Ubah semua spasi ganda (akibat penghapusan di atas) menjadi spasi tunggal
         raw_text = re.sub(r'\s{2,}', ' ', raw_text).strip()
-        # ----------------------------------------------------------------
 
+        # 2. PISAHKAN MENJADI BARIS-BARIS LOGIS (PERBAIKAN UTAMA)
         rows = self._parse_raw_input_to_rows(raw_text)
         processed_rows = []
 
         for row in rows:
+            # Hapus karakter aneh di awal/akhir baris (seperti titik koma atau titik yang tersisa)
+            row = row.strip(' .;:|,')
+            
+            if not row:
+                continue
+
             if self.use_ai and self.ai_parser:
                 try:
                     parsed_data = self.ai_parser.parse_row(row)
@@ -47,19 +48,34 @@ class DataProcessor:
         return processed_rows
 
     def _parse_raw_input_to_rows(self, raw_text: str) -> List[str]:
-        """Parse raw text into individual rows"""
-        rows = []
+        """Parse raw text into individual rows by grouping lines without time to the previous row"""
         lines = raw_text.strip().split('\n')
+        grouped_rows = []
+        current_row_parts = []
 
-        current_row = []
         for line in lines:
             line = line.strip()
             if not line:
                 continue
 
-            # Check if line starts with time pattern
+            # Periksa apakah baris dimulai dengan Waktu (misal: 06:00 atau 23:00)
+            # Menggunakan regex yang lebih fleksibel (bisa 1 digit atau 2 digit jam)
             if re.match(r'^\d{1,2}:\d{2}', line):
-                if current_row:
+                # Jika ada baris sebelumnya yang sedang dikumpulkan, simpan dulu
+                if current_row_parts:
+                    grouped_rows.append(' '.join(current_row_parts))
+                
+                # Mulai baris baru
+                current_row_parts = [line]
+            else:
+                # Baris ini TIDAK punya waktu, artinya dia adalah lanjutan dari baris sebelumnya
+                current_row_parts.append(line)
+
+        # Jangan lupa simpan baris terakhir yang masih dalam antrian
+        if current_row_parts:
+            grouped_rows.append(' '.join(current_row_parts))
+
+        return grouped_rows                if current_row:
                     rows.append(' '.join(current_row))
                 current_row = [line]
             else:
