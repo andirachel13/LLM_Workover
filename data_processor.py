@@ -3,7 +3,7 @@
 import re
 import json
 from typing import List, Dict
-from parser.ai_parser import AIParser
+from parser import AIParser
 from rule_parser import RuleParser  # Sebagai fallback (cadangan)
 
 class DataProcessor:
@@ -12,7 +12,7 @@ class DataProcessor:
     def __init__(self, use_ai: bool = False, api_key: str = None):
         self.use_ai = use_ai
         self.api_key = api_key
-        self.ai_parser = AIParser(api_key) if use_ai and api_key else None
+        self.parser = AIParser(api_key) if use_ai and api_key else None
         self.rule_parser = RuleParser()
 
     def process_raw_data(self, raw_text: str) -> List[Dict]:
@@ -33,9 +33,9 @@ class DataProcessor:
                 continue
 
             # 3. KIRIM KE AI (WAJIB)
-            if self.use_ai and self.ai_parser:
+            if self.use_ai and self.parser:
                 try:
-                    parsed_data = self.ai_parser.parse_row(row)
+                    parsed_data = self.parser.parse_row(row)
                 except Exception as e:
                     # Jika AI gagal, pakai rule parser sebagai backup
                     print(f"AI Failed, using fallback: {e}")
