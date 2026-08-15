@@ -1,53 +1,42 @@
-# exports/csv_exporter.py
+# csv_export.py
+
 import pandas as pd
-from datetime import datetime
-from typing import List, Dict, Tuple
-from config import Config  # Import the Config class
+from typing import List, Dict
+from config import Config
 
 class CSVExporter:
-    """Export data to CSV format"""
+    """Exporter for CSV and Dataframe formatting"""
 
-    def __init__(self):
-        # Config is a class with static properties, no need to instantiate
-        # We'll access Config.COLUMN_MAPPING directly
-        pass
-
-    def export(self, data: List[Dict], filename: str = None) -> Tuple[str, str]:
-        """Export data to CSV"""
+    def export(self, data: List[Dict]) -> tuple:
+        """Export data as CSV string"""
         df = self._format_dataframe(data)
-
-        if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"workover_data_{timestamp}.csv"
-
-        csv_data = df.to_csv(index=False, encoding='utf-8-sig')
-
+        csv_data = df.to_csv(index=False)
+        filename = "drilling_workover_data.csv"
         return csv_data, filename
 
     def _format_dataframe(self, data: List[Dict]) -> pd.DataFrame:
-        """Format data as DataFrame"""
+        """Convert data to pandas DataFrame with proper formatting"""
         if not data:
             return pd.DataFrame()
-            
+
+        # 1. Konversi data list dictionary ke DataFrame
         df = pd.DataFrame(data)
+        
+        # 2. Ganti semua nilai NaN dengan string kosong agar tabel lebih bersih
+        df = df.fillna('')
+        
+        # 3. Ubah nama kolom ke Bahasa Indonesia sesuai Config
+        df = df.rename(columns=Config.COLUMN_MAPPING)
 
-        # Rename columns using Config.COLUMN_MAPPING
-        # Note: Make sure your data dict keys match the keys in COLUMN_MAPPING
-        if hasattr(Config, 'COLUMN_MAPPING'):
-            # Only rename columns that exist in the DataFrame
-            column_mapping = {k: v for k, v in Config.COLUMN_MAPPING.items() 
-                            if k in df.columns}
-            if column_mapping:
-                df = df.rename(columns=column_mapping)
-        else:
-            # Fallback if COLUMN_MAPPING is not defined
-            print("Warning: COLUMN_MAPPING not found in Config")
-
-        # Format duration - check both possible column names
-        duration_columns = ["Durasi (Jam)", "durasi_jam"]
-        for col in duration_columns:
-            if col in df.columns:
-                df[col] = df[col].apply(lambda x: f"{float(x):.1f}" if pd.notnull(x) else "")
-                break
+        # 4. PASTIKAN TIDAK ADA KARAKTER PEMISAH ANEH
+        # Loop melalui semua kolom teks
+        for col in df.columns:
+            # Jika isi kolom adalah list (karena mungkin ada sisa logika penggabungan), ubah menjadi string biasa
+            df[col] = df[col].apply(lambda x: '; '.join(x) if isinstance(x, list) else x)
+            
+            # HAPUS KARAKTER SAMPAH SEPERTI '|' ATAU ';' DI DALAM STRING
+            df[col] = df[col].astype(str).str.replace('|', ' ')
+            df[col] = df[col].astype(str).str.replace(';', ' ')
+            df[col] = df[col].astype(str).str.replace('  ', ' ') # Hapus spasi ganda
 
         return df
