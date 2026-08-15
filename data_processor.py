@@ -15,6 +15,20 @@ class DataProcessor:
 
     def process_raw_data(self, raw_text: str) -> List[Dict]:
         """Process raw text data into structured format"""
+        
+        # --- LANGKAH BARU: BERSIHKAN DATA MENTAH DARI KARAKTER SAMPAH ---
+        # 1. Hapus karakter ; (titik koma) dan | (pipe) dari seluruh teks
+        raw_text = raw_text.replace(';', ' ')
+        raw_text = raw_text.replace('|', ' ')
+        
+        # 2. Hapus karakter koma (,) yang berada di pertengahan kalimat Deskripsi (selain pada data hasil 'WATER, OIL')
+        # Kita menggunakan Regex agar tidak menghapus koma pada data angka/formula (seperti IFL, SD, WATER)
+        raw_text = re.sub(r'(?<!\d),(?!\s*\d+%)', ' ', raw_text)
+        
+        # 3. Ubah semua spasi ganda (akibat penghapusan di atas) menjadi spasi tunggal
+        raw_text = re.sub(r'\s{2,}', ' ', raw_text).strip()
+        # ----------------------------------------------------------------
+
         rows = self._parse_raw_input_to_rows(raw_text)
         processed_rows = []
 
