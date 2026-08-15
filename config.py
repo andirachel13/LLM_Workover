@@ -3,16 +3,8 @@
 import streamlit as st
 
 class Config:
-    """Application configuration"""
-
-    # Page configuration
-    PAGE_CONFIG = {
-        "page_title": "Drilling Workover Data Processor",
-        "page_icon": "🛢️",
-        "layout": "wide"
-    }
-
-    # Column mappings for display
+    PAGE_CONFIG = {"page_title": "Drilling Workover Data Processor", "page_icon": "🛢️", "layout": "wide"}
+    
     COLUMN_MAPPING = {
         "waktu_mulai": "Waktu Mulai",
         "waktu_akhir": "Waktu Akhir",
@@ -22,32 +14,12 @@ class Config:
         "kondisi_hasil": "Kondisi Awal/Hasil Utama"
     }
 
-    # Keywords for operation classification
-    OPERATION_KEYWORDS = {
-        'bailing': ['BAILING', 'B.O.S'],
-        'swabbing': ['SWAB'],
-        'running': ['RIH', 'RUN'],
-        'pulling': ['POH', 'PULL'],
-        'makeup': ['M/U', 'MAKE UP'],
-        'rigup': ['N/U'],
-        'rigdown': ['N/D'],
-        'waiting': ['W/O', 'WAIT']
-    }
-
-    # Equipment keywords
-    EQUIPMENT_KEYWORDS = [
-        'SAND PUMP', 'M.SHOE', 'TBG', 'SWAB', 'OE', 'OET',
-        'PUP', 'LINE', 'TOOL', 'PUMP', 'CASING', 'DRILL PIPE'
-    ]
+    INPUT_FORMAT_GUIDE = "WaktuMulai WaktuAkhir Durasi Peralatan&Deskripsi Interval/Kedalaman Kondisi/Hasil"
+    EXAMPLE_CODE = "06:00 09:00 3.0 Lanjutkan BAILING OF SAND (B.O.S.) L/D 3-3/4\" SAND PUMP B.O.S F/ 611' TO 618' Pekerjaan terhenti"
 
     @staticmethod
     def init_session_state():
-        """Initialize session state variables"""
-        if "processed_data" not in st.session_state:
-            st.session_state.processed_data = []
-        if "raw_input" not in st.session_state:
-            st.session_state.raw_input = ""
-        if "api_key" not in st.session_state:
-            st.session_state.api_key = ""
-        if "gemini_configured" not in st.session_state:
-            st.session_state.gemini_configured = False
+        if "processed_data" not in st.session_state: st.session_state.processed_data = []
+        if "raw_input" not in st.session_state: st.session_state.raw_input = ""
+        if "api_key" not in st.session_state: st.session_state.api_key = ""
+        if "use_ai" not in st.session_state: st.session_state.use_ai = False
