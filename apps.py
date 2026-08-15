@@ -1,10 +1,11 @@
 # app.py
-
 import streamlit as st
 import os
 import pandas as pd
 from config import Config
 from data_processor import DataProcessor
+from analytics import DataAnalyzer
+from csv_export import CSVExporter
 
 # Setup halaman
 st.set_page_config(page_title="Drilling Workover Data Processor", layout="wide")
@@ -25,7 +26,7 @@ def main():
     with st.sidebar:
         st.header("⚙️ Konfigurasi")
         
-        # Ambil API Key dari Secrets/Env jika ada
+        # Ambil API Key dari Secrets/Env
         default_key = st.secrets.get("llm_workover", os.getenv("llm_workover", ""))
         if not st.session_state.api_key and default_key:
             st.session_state.api_key = default_key
@@ -43,10 +44,10 @@ def main():
         
         st.markdown("---")
         st.header("📋 Format Input")
-        st.markdown("`WaktuMulai WaktuAkhir Durasi Deskripsi...`")
+        st.markdown("Contoh format:")
         st.code("06:00 09:00 3.0\nLanjutkan BAILING OF SAND (B.O.S.)\nL/D 3-3/4\" SAND PUMP.\nB.O.S F/ 611' TO 618'\nPekerjaan terhenti")
 
-    # Tabs (Kembalikan 4 tab)
+    # Tabs (Input, Tabel, Analisis, Ekspor)
     tab1, tab2, tab3, tab4 = st.tabs(["📥 Input Data", "📊 Tabel Hasil", "📈 Analisis", "💾 Ekspor"])
 
     with tab1:
@@ -67,7 +68,7 @@ def main():
                     )
                     processed = processor.process_raw_data(raw_input)
                     
-                    # Bersihkan data akhir sebelum simpan
+                    # Bersihkan data akhir
                     clean_data = []
                     for row in processed:
                         clean_row = {}
@@ -98,7 +99,8 @@ def main():
             
             # Statistik
             c1, c2, c3 = st.columns(3)
-            with c1: st.metric("Total Baris", len(processed))
+            # PERBAIKAN DISINI: Ganti 'processed' menjadi 'st.session_state.processed_data'
+            with c1: st.metric("Total Baris", len(st.session_state.processed_data))
             with c2: st.metric("Total Durasi (Jam)", f"{df['Durasi (Jam)'].sum():.1f}")
             with c3: st.metric("AI Digunakan", "Ya" if st.session_state.use_ai and st.session_state.api_key else "Tidak")
         else:
@@ -107,17 +109,30 @@ def main():
     with tab3:
         st.subheader("Analisis Operasi")
         if st.session_state.processed_data:
-            st.info("📊 Modul analisis sedang dalam pengembangan lanjutan.")
+            analyzer = DataAnalyzer()
+            totals = analyzer.calculate_totals(st.session_state.processed_data)
+            
+            st.write("**Distribusi Jenis Operasi:**")
+            for op, count in totals.get("operation_counts", {}).items():
+                st.write(f"- {op}: {count}x")
+            
+            st.write(f"\n**Total Jam Operasi:** {totals.get('total_duration_hours', 0):.1f} Jam")
         else:
-            st.info("Belum ada data.")
+            st.info("Belum ada data untuk dianalisis.")
 
     with tab4:
         st.subheader("Ekspor Data")
         if st.session_state.processed_data:
-            csv = pd.DataFrame(st.session_state.processed_data).to_csv(index=False)
-            st.download_button("📥 Download CSV", data=csv, file_name="workover_data.csv", mime="text/csv")
+            exporter = CSVExporter()
+            csv_data, filename = exporter.export(st.session_state.processed_data)
+            st.download_button(
+                label="📥 Download CSV", 
+                data=csv_data, 
+                file_name=filename, 
+                mime="text/csv"
+            )
         else:
-            st.info("Belum ada data.")
+            st.info("Belum ada data untuk diekspor.")
 
 if __name__ == "__main__":
     main()
