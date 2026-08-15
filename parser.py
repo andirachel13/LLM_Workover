@@ -1,4 +1,5 @@
-# parsers/ai_parser.py
+# parser.py
+
 import re
 import json
 import google.generativeai as genai
@@ -22,29 +23,28 @@ class AIParser:
 
     def _create_prompt(self, row: str) -> str:
         return f"""
-        Parse this drilling workover data row into a CLEAN JSON object.
+        Parse this drilling workover data row into a JSON object.
         Row: "{row}"
 
-        Return a JSON object with EXACTLY these keys (use Indonesian for content):
+        Return a valid JSON object with EXACTLY these keys:
         {{
-            "waktu_mulai": "HH:MM",
-            "waktu_akhir": "HH:MM",  
+            "waktu_mulai": "HH:MM format",
+            "waktu_akhir": "HH:MM format",
             "durasi_jam": float,
-            "peralatan_deskripsi": "clean text without any ; or | characters",
-            "interval_kedalaman": "depth string like F/ 611' TO 618'",
-            "kondisi_hasil": "condition result"
+            "peralatan_deskripsi": "string describing equipment",
+            "interval_kedalaman": "string describing depth",
+            "kondisi_hasil": "string describing condition/result"
         }}
 
-        RULES (STRICT):
-        1. REMOVE all semicolons (;) and pipes (|) from all strings.
-        2. DO NOT add extra punctuation like commas in the middle of sentences.
-        3. Return ONLY the JSON object. No markdown, no explanations, no code blocks.
+        CRITICAL RULES FOR OUTPUT (STRICT):
+        1. DO NOT use semicolons (;) or pipes (|) ANYWHERE in the strings.
+        2. USE ONLY spaces, dots (.), and commas (,) if necessary.
+        3. If information is missing, use "N/A" instead of empty string.
+        4. Return ONLY the JSON object. NO explanations, NO markdown formatting (like ```json).
         """
 
     def _extract_json_from_response(self, response_text: str) -> Dict:
         text = response_text.strip()
-        
-        # Bersihkan markdown JSON jika ada
         text = re.sub(r'```json\s*', '', text)
         text = re.sub(r'\s*```', '', text)
         text = re.sub(r'```', '', text)
@@ -52,7 +52,6 @@ class AIParser:
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
-            # Jika JSON gagal di-load, coba ambil kurung kurawal pertama dan terakhir
             start_idx = text.find('{')
             end_idx = text.rfind('}')
             if start_idx != -1 and end_idx != -1:
@@ -61,9 +60,11 @@ class AIParser:
             else:
                 raise ValueError("Gagal mengekstrak JSON dari respon AI")
 
-        # Bersihkan data dari karakter aneh hasil AI
+        # PAKSA BERSIHKAN DATA
         for key in data:
             if isinstance(data[key], str):
-                data[key] = data[key].replace(';', ' ').replace('|', ' ').strip()
-        
+                data[key] = data[key].replace(';', ' ')
+                data[key] = data[key].replace('|', ' ')
+                data[key] = re.sub(r'\s{2,}', ' ', data[key]).strip()
+                
         return data
