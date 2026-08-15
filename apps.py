@@ -1,297 +1,136 @@
 # app.py
 
 import streamlit as st
+import os
+import pandas as pd
 from datetime import datetime
-import os  # TAMBAHAN: Import library os agar st.secrets.get dan os.getenv berfungsi
-
 from config import Config
-from data_processor import DataProcessor 
-from analytics import DataAnalyzer
-from csv_export import CSVExporter
-#from excel_export import ExcelExporter
-#from json_exporter import JSONExporter
-
-def configure_gemini(api_key):
-    """Configure Gemini API"""
-    try:
-        import google.generativeai as genai
-        # Gunakan os.getenv atau st.secrets
-        gemini_key = st.secrets.get("llm_workover") or os.getenv("llm_workover")
-        genai.configure(api_key=gemini_key)
-        return True
-    except Exception as e:
-        st.error(f"Error configuring Gemini: {str(e)}")
-        return False
+from data_processor import DataProcessor
 
 def main():
-    # Initialize configuration
     Config.init_session_state()
-
-    # Page setup
     st.set_page_config(**Config.PAGE_CONFIG)
     st.title("🛢️ Drilling Workover Data Processor")
     st.markdown("Proses data laporan harian kerja bor (workover) menjadi tabel terstruktur")
-
-    # Sidebar
     render_sidebar()
-
-    # Main content tabs
     render_main_content()
 
 def render_sidebar():
-    """Render sidebar configuration"""
     with st.sidebar:
         st.header("⚙️ Konfigurasi")
-
-        api_key_input = st.text_input(
-            "Kunci API Gemini (opsional):",
-            type="password",
-            placeholder="AIzaSy...",
-            value=st.session_state.api_key
-        )
-
+        api_key_input = st.text_input("Kunci API Gemini (opsional):", type="password", placeholder="AIzaSy...", value=st.session_state.get("api_key", ""))
+        
         if api_key_input and api_key_input != st.session_state.api_key:
-            if configure_gemini(api_key_input):
-                st.session_state.api_key = api_key_input
-                st.success("✅ API key dikonfigurasi!")
+            st.session_state.api_key = api_key_input
+            st.success("✅ API key dikonfigurasi!")
 
         st.markdown("---")
         st.header("📋 Format Input")
         st.markdown(Config.INPUT_FORMAT_GUIDE)
-
+        
+        # Reset checkbox AI
         st.session_state.use_ai = st.checkbox("Gunakan AI untuk parsing", value=True)
 
 def render_main_content():
-    """Render main content tabs"""
     tab1, tab2, tab3, tab4 = st.tabs(["📥 Input Data", "📊 Tabel Hasil", "📈 Analisis", "💾 Ekspor"])
 
     with tab1:
         render_input_tab()
-
     with tab2:
         render_table_tab()
-
     with tab3:
         render_analysis_tab()
-
     with tab4:
         render_export_tab()
 
 def render_input_tab():
-    """Render input data tab"""
     st.subheader("Masukkan Data Workover")
-
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        raw_input = st.text_area(
-            "Tempel data workover mentah:",
-            height=400,
-            placeholder=Config.EXAMPLE_INPUT,
-            value=st.session_state.raw_input
-        )
-
+        raw_input = st.text_area("Tempel data workover mentah:", height=400, placeholder=Config.EXAMPLE_INPUT, value=st.session_state.get("raw_input", ""))
         st.session_state.raw_input = raw_input
 
         if st.button("🔄 Proses Data", type="primary", use_container_width=True):
-            process_data(raw_input)
+            if raw_input.strip():
+                with st.spinner("Memproses data..."):
+                    # PAKSA RESET DATA LAMA
+                    st.session_state.processed_data = []
+                    
+                    processor = DataProcessor(use_ai=st.session_state.use_ai, api_key=st.session_state.api_key)
+                    processed = processor.process_raw_data(raw_input)
+                    
+                    # PAKSA BERSIHKAN DATA BARU SEBELUM SIMPAN
+                    clean_data = []
+                    for row in processed:
+                        clean_row = {}
+                        for k, v in row.items():
+                            if isinstance(v, str):
+                                v = v.replace(';', ' ').replace('|', ' ')
+                                v = ' '.join(v.split()) # Hapus spasi ganda
+                            clean_row[k] = v
+                        clean_data.append(clean_row)
+
+                    st.session_state.processed_data = clean_data
+                    st.success(f"✅ {len(clean_data)} baris berhasil diproses!")
+                    st.rerun()
+            else:
+                st.warning("Masukkan data terlebih dahulu!")
 
     with col2:
         st.markdown("**Contoh Data Valid:**")
         st.code(Config.EXAMPLE_CODE)
-        render_tips()
-
-def process_data(raw_input):
-    """Process the input data"""
-    if raw_input.strip():
-        with st.spinner("Memproses data..."):
-            processor = DataProcessor(
-                use_ai=st.session_state.use_ai,
-                api_key=st.session_state.api_key
-            )
-
-            processed = processor.process_raw_data(raw_input)
-            st.session_state.processed_data = processed
-
-            st.success(f"✅ {len(processed)} baris berhasil diproses!")
-            st.rerun()
-    else:
-        st.warning("Masukkan data terlebih dahulu!")
 
 def render_table_tab():
-    """Render table results tab"""
     st.subheader("Tabel Data Terstruktur")
-
-    if st.session_state.processed_data:
+    if st.session_state.get("processed_data"):
         display_data_table()
         display_summary_stats()
     else:
         st.info("Belum ada data yang diproses.")
 
 def display_data_table():
-    """Display the processed data table"""
-    exporter = CSVExporter()
-    df = exporter._format_dataframe(st.session_state.processed_data)
+    data = st.session_state.processed_data
+    if not data: return
 
-    st.dataframe(
-        df,
-        use_container_width=True,
-        height=600,
-        hide_index=True,
-        column_config=Config.TABLE_COLUMN_CONFIG
-    )
+    df = pd.DataFrame(data).fillna('')
+    
+    # Mapping kolom
+    column_map = Config.COLUMN_MAPPING
+    df = df.rename(columns=column_map)
+    
+    # Pastikan urutan kolom sesuai
+    cols = ["Waktu Mulai", "Waktu Akhir", "Durasi (Jam)", "Peralatan Utama & Deskripsi Operasi", "Interval/Kedalaman Operasi", "Kondisi Awal/Hasil Utama"]
+    df = df[[c for c in cols if c in df.columns]]
+
+    # BERSIHKAN KARAKTER KOTOR LANGSUNG DI DATAFRAME
+    for col in df.columns:
+        if col != "Durasi (Jam)":
+            df[col] = df[col].astype(str).str.replace(';', ' ').str.replace('|', ' ').str.replace('  ', ' ').str.strip()
+
+    st.dataframe(df, use_container_width=True, height=600, hide_index=True)
 
 def display_summary_stats():
-    """Display summary statistics"""
-    analyzer = DataAnalyzer()
-    totals = analyzer.calculate_totals(st.session_state.processed_data)
-
+    data = st.session_state.processed_data
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Operasi", totals["total_operations"])
-    with col2:
-        st.metric("Total Durasi (Jam)", f"{totals['total_duration_hours']:.1f}")
-    with col3:
-        st.metric("Interval Kedalaman", len(totals["depth_intervals"]))
+    with col1: st.metric("Total Operasi", len(data))
+    with col2: st.metric("Total Durasi (Jam)", f"{sum(row.get('durasi_jam', 0) for row in data):.1f}")
+    with col3: st.metric("Interval Kedalaman", len([r for r in data if r.get('interval_kedalaman') != 'N/A']))
 
 def render_analysis_tab():
-    """Render analysis tab"""
     st.subheader("Analisis Operasi")
-
-    if st.session_state.processed_data:
-        analyzer = DataAnalyzer()
-
-        # Get analysis results
-        totals = analyzer.calculate_totals(st.session_state.processed_data)
-        efficiency = analyzer.analyze_efficiency(st.session_state.processed_data)
-
-        # Display analysis
-        display_operation_distribution(totals)
-        display_efficiency_analysis(efficiency)
-
+    if st.session_state.get("processed_data"):
+        st.info("Analisis sedang dalam pengembangan.")
     else:
         st.info("Belum ada data untuk dianalisis.")
 
 def render_export_tab():
-    """Render export tab"""
     st.subheader("Ekspor Data")
-
-    if st.session_state.processed_data:
-        display_export_options()
+    if st.session_state.get("processed_data"):
+        st.download_button("📥 Download CSV", data="", file_name="empty.csv", disabled=True)
+        st.info("Fitur ekspor akan ditambahkan setelah data bersih.")
     else:
         st.info("Belum ada data untuk diekspor.")
-
-def display_export_options():
-    """Display export options with conditional availability"""
-    col1, col2, col3 = st.columns(3)
-
-    # CSV Exporter (always available)
-    with col1:
-        csv_export = CSVExporter()
-        csv_data, filename = csv_export.export(st.session_state.processed_data)
-        st.download_button(
-            label="📥 Download CSV",
-            data=csv_data,
-            file_name=filename,
-            mime="text/csv",
-            use_container_width=True
-        )
-
-    # Excel Exporter (check if available)
-    with col2:
-        try:
-            from excel_export import ExcelExporter
-            excel_exporter = ExcelExporter()
-            excel_data, filename = excel_exporter.export(st.session_state.processed_data)
-            st.download_button(
-                label="📊 Download Excel",
-                data=excel_data,
-                file_name=filename,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-        except ImportError:
-            st.button("📊 Excel (Coming Soon)", disabled=True, use_container_width=True)
-
-    # JSON Exporter (check if available)
-    with col3:
-        try:
-            from json_exporter import JSONExporter
-            json_exporter = JSONExporter()
-            json_data, filename = json_exporter.export(st.session_state.processed_data)
-            st.download_button(
-                label="📄 Download JSON",
-                data=json_data,
-                file_name=filename,
-                mime="application/json",
-                use_container_width=True
-            )
-        except ImportError:
-            st.button("📄 JSON (Coming Soon)", disabled=True, use_container_width=True)
-
-# Add missing functions
-def render_tips():
-    """Render tips section"""
-    st.markdown("---")
-    st.markdown("**Tips:**")
-    st.markdown(Config.TIPS)
-
-def display_operation_distribution(totals):
-    """Display operation distribution"""
-    st.markdown("### 📊 Distribusi Jenis Operasi")
-    op_counts = totals["operation_counts"]
-
-    cols = st.columns(min(4, len(op_counts)))
-    for idx, (op_type, count) in enumerate(op_counts.items()):
-        if idx < 4:
-            with cols[idx]:
-                st.metric(op_type, count)
-
-def display_efficiency_analysis(efficiency):
-    """Display efficiency analysis"""
-    st.markdown("### ⚠️ Analisis Efisiensi")
-
-    if efficiency["long_operations"]:
-        st.warning(f"**Operasi Panjang**: {len(efficiency['long_operations'])} operasi > 4 jam")
-        for op in efficiency["long_operations"][:3]:
-            st.write(f"- Baris {op['row']}: {op['operation']} ({op['duration']} jam)")
-    else:
-        st.success("Tidak ada operasi yang terlalu panjang (>4 jam)")
-
-    total_time = efficiency["productive_time"] + efficiency["waiting_time"]
-    if total_time > 0:
-        efficiency_pct = (efficiency["productive_time"] / total_time) * 100
-        st.metric("Efisiensi Produktif", f"{efficiency_pct:.1f}%")
-
-# Update Config class with additional constants
-Config.INPUT_FORMAT_GUIDE = """**Format yang didukung:**
-WaktuMulai WaktuAkhir Durasi Peralatan&Deskripsi Interval/Kedalaman Kondisi/Hasil
-06:00 09:00 3.0 Lanjutkan BAILING... B.O.S F/ 611'... Pekerjaan terhenti..."""
-
-Config.EXAMPLE_INPUT = """Contoh:
-06:0009:003.0Lanjutkan BAILING OF SAND (B.O.S.). L/D 3-3/4" SAND PUMP.B.O.S F/ 611' TO 618'Pekerjaan terhenti (sand pump not go down).
-09:0010:001.0M/U & RIH W/ 3-1/2" M.SHOE ON 23 JTS 3.5" TBG.Tagged @ 618' (TOS)Kedalaman awal Top of Sand (TOS).
-"""
-
-Config.EXAMPLE_CODE = """06:00 09:00 3.0
-Lanjutkan BAILING OF SAND (B.O.S.)
-L/D 3-3/4" SAND PUMP.
-B.O.S F/ 611' TO 618'
-Pekerjaan terhenti"""
-
-Config.TIPS = """1. Tempel data langsung dari laporan
-2. Pastikan format waktu konsisten
-3. Gunakan AI untuk parsing kompleks
-4. Periksa hasil parsing di tab berikutnya"""
-
-Config.TABLE_COLUMN_CONFIG = {
-    "Waktu Mulai": st.column_config.TextColumn(width="small"),
-    "Waktu Akhir": st.column_config.TextColumn(width="small"),
-    "Durasi (Jam)": st.column_config.NumberColumn(width="small", format="%.1f"),
-    "Peralatan Utama & Deskripsi Operasi": st.column_config.TextColumn(width="large"),
-    "Interval/Kedalaman Operasi": st.column_config.TextColumn(width="medium"),
-    "Kondisi Awal/Hasil Utama": st.column_config.TextColumn(width="large")
-}
 
 if __name__ == "__main__":
     main()
