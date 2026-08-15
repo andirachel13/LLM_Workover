@@ -5,8 +5,7 @@ from datetime import datetime
 import os  # TAMBAHAN: Import library os agar st.secrets.get dan os.getenv berfungsi
 
 from config import Config
-# PERBAIKAN: Tambahkan folder 'processors.' di depannya
-from processors.data_processor import DataProcessor 
+from data_processor import DataProcessor 
 from analytics import DataAnalyzer
 from csv_export import CSVExporter
 #from excel_export import ExcelExporter
