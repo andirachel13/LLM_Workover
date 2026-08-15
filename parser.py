@@ -1,5 +1,4 @@
 # parsers/ai_parser.py
-
 import re
 import json
 import google.generativeai as genai
@@ -13,53 +12,58 @@ class AIParser:
             genai.configure(api_key=api_key)
 
     def parse_row(self, row: str) -> Optional[Dict]:
-        """Parse a single row using AI"""
         try:
-            model = genai.GenerativeModel('gemini-pro-vision')
-
+            model = genai.GenerativeModel('gemini-pro')
             prompt = self._create_prompt(row)
             response = model.generate_content(prompt)
-
             return self._extract_json_from_response(response.text)
-
         except Exception as e:
             raise Exception(f"AI parsing error: {str(e)}")
 
     def _create_prompt(self, row: str) -> str:
-        """Create prompt for Gemini"""
         return f"""
-        Parse this drilling workover data row into structured JSON format.
-        The row is in Indonesian language.
-
+        Parse this drilling workover data row into a CLEAN JSON object.
         Row: "{row}"
 
-        Extract the following information into a JSON object:
+        Return a JSON object with EXACTLY these keys (use Indonesian for content):
         {{
-            "waktu_mulai": "HH:MM format",
-            "waktu_akhir": "HH:MM format",
+            "waktu_mulai": "HH:MM",
+            "waktu_akhir": "HH:MM",  
             "durasi_jam": float,
-            "peralatan_deskripsi": "string describing equipment and operation",
-            "interval_kedalaman": "string describing depth interval",
-            "kondisi_hasil": "string describing initial condition/main result"
+            "peralatan_deskripsi": "clean text without any ; or | characters",
+            "interval_kedalaman": "depth string like F/ 611' TO 618'",
+            "kondisi_hasil": "condition result"
         }}
 
-        Rules:
-        1. Time format should be HH:MM (24-hour format)
-        2. Convert durations like "3.0" to float 3.0
-        3. Keep all Indonesian text as is
-        4. If information is missing, use "N/A"
-        5. Handle midnight times properly (00:00 is next day)
-
-        Return ONLY the JSON object, no additional text.
+        RULES (STRICT):
+        1. REMOVE all semicolons (;) and pipes (|) from all strings.
+        2. DO NOT add extra punctuation like commas in the middle of sentences.
+        3. Return ONLY the JSON object. No markdown, no explanations, no code blocks.
         """
 
     def _extract_json_from_response(self, response_text: str) -> Dict:
-        """Extract JSON from AI response"""
         text = response_text.strip()
-
-        # Remove markdown code blocks
+        
+        # Bersihkan markdown JSON jika ada
         text = re.sub(r'```json\s*', '', text)
         text = re.sub(r'\s*```', '', text)
         text = re.sub(r'```', '', text)
 
-        return json.loads(text)
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            # Jika JSON gagal di-load, coba ambil kurung kurawal pertama dan terakhir
+            start_idx = text.find('{')
+            end_idx = text.rfind('}')
+            if start_idx != -1 and end_idx != -1:
+                text = text[start_idx:end_idx+1]
+                data = json.loads(text)
+            else:
+                raise ValueError("Gagal mengekstrak JSON dari respon AI")
+
+        # Bersihkan data dari karakter aneh hasil AI
+        for key in data:
+            if isinstance(data[key], str):
+                data[key] = data[key].replace(';', ' ').replace('|', ' ').strip()
+        
+        return data
