@@ -1,13 +1,22 @@
-# analytics/analyzer.py
+# analytics.py
 
 from typing import Dict, List
-from config import Config
 
 class DataAnalyzer:
     """Analyze drilling workover data"""
 
     def __init__(self):
-        self.config = Config
+        # Definisikan keyword langsung di sini agar tidak bergantung pada config.py
+        self.OPERATION_KEYWORDS = {
+            'bailing': ['BAILING', 'B.O.S'],
+            'swabbing': ['SWAB'],
+            'running': ['RIH', 'RUN'],
+            'pulling': ['POH', 'PULL'],
+            'makeup': ['M/U', 'MAKE UP'],
+            'rigup': ['N/U'],
+            'rigdown': ['N/D'],
+            'waiting': ['W/O', 'WAIT']
+        }
 
     def calculate_totals(self, processed_data: List[Dict]) -> Dict:
         """Calculate summary statistics"""
@@ -36,7 +45,8 @@ class DataAnalyzer:
 
     def _classify_operation(self, description: str) -> str:
         """Classify operation based on keywords"""
-        for op_type, keywords in self.config.OPERATION_KEYWORDS.items():
+        # Gunakan self.OPERATION_KEYWORDS yang sudah didefinisikan di __init__
+        for op_type, keywords in self.OPERATION_KEYWORDS.items():
             for keyword in keywords:
                 if keyword in description:
                     return op_type.title()
