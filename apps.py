@@ -2,9 +2,11 @@
 
 import streamlit as st
 from datetime import datetime
+import os  # TAMBAHAN: Import library os agar st.secrets.get dan os.getenv berfungsi
 
 from config import Config
-from data_processor import DataProcessor
+# PERBAIKAN: Tambahkan folder 'processors.' di depannya
+from processors.data_processor import DataProcessor 
 from analytics import DataAnalyzer
 from csv_export import CSVExporter
 #from excel_export import ExcelExporter
@@ -14,8 +16,9 @@ def configure_gemini(api_key):
     """Configure Gemini API"""
     try:
         import google.generativeai as genai
-        api_key = st.secrets.get("llm_workover", os.getenv("llm_workover"))
-        genai.configure(api_key=api_key)
+        # Gunakan os.getenv atau st.secrets
+        gemini_key = st.secrets.get("llm_workover") or os.getenv("llm_workover")
+        genai.configure(api_key=gemini_key)
         return True
     except Exception as e:
         st.error(f"Error configuring Gemini: {str(e)}")
