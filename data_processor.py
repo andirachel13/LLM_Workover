@@ -3,8 +3,8 @@
 import re
 import json
 from typing import List, Dict
-from parsers.ai_parser import AIParser
-from parsers.rule_parser import RuleParser  # Sebagai fallback (cadangan)
+from parser.ai_parser import AIParser
+from rule_parser import RuleParser  # Sebagai fallback (cadangan)
 
 class DataProcessor:
     """Main data processing class"""
