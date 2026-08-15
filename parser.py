@@ -19,7 +19,9 @@ class AIParser:
             response = model.generate_content(prompt)
             return self._extract_json_from_response(response.text)
         except Exception as e:
-            raise Exception(f"AI parsing error: {str(e)}")
+            # Tangkap error dan kembalikan None agar tidak crash
+            print(f"AI parsing fallback due to: {e}")
+            return None
 
     def _create_prompt(self, row: str) -> str:
         return f"""
@@ -28,39 +30,43 @@ class AIParser:
 
         Return a valid JSON object with EXACTLY these keys:
         {{
-            "waktu_mulai": "HH:MM format",
-            "waktu_akhir": "HH:MM format",
+            "waktu_mulai": "HH:MM",
+            "waktu_akhir": "HH:MM",
             "durasi_jam": float,
-            "peralatan_deskripsi": "string describing equipment",
-            "interval_kedalaman": "string describing depth",
-            "kondisi_hasil": "string describing condition/result"
+            "peralatan_deskripsi": "string describing the equipment or operation",
+            "interval_kedalaman": "string describing the depth interval (e.g., F/ 611' TO 618')",
+            "kondisi_hasil": "string describing the result or condition"
         }}
 
-        CRITICAL RULES FOR OUTPUT (STRICT):
-        1. DO NOT use semicolons (;) or pipes (|) ANYWHERE in the strings.
-        2. USE ONLY spaces, dots (.), and commas (,) if necessary.
-        3. If information is missing, use "N/A" instead of empty string.
-        4. Return ONLY the JSON object. NO explanations, NO markdown formatting (like ```json).
+        VERY IMPORTANT RULES:
+        1. DO NOT use semicolons (;) or pipes (|) anywhere in your strings.
+        2. If a value is missing, use "N/A".
+        3. Return ONLY the JSON object. No markdown, no code blocks (no ```json or ```), no explanation.
         """
 
     def _extract_json_from_response(self, response_text: str) -> Dict:
         text = response_text.strip()
+        
+        # 1. Bersihkan markdown JSON jika ada
         text = re.sub(r'```json\s*', '', text)
         text = re.sub(r'\s*```', '', text)
         text = re.sub(r'```', '', text)
 
+        # 2. Load JSON dengan aman
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
+            # Jika AI gagal membuat JSON, ambil kurung kurawal terakhir
             start_idx = text.find('{')
             end_idx = text.rfind('}')
             if start_idx != -1 and end_idx != -1:
                 text = text[start_idx:end_idx+1]
                 data = json.loads(text)
             else:
-                raise ValueError("Gagal mengekstrak JSON dari respon AI")
+                # Jika benar-benar gagal, lempar error ke atas
+                raise ValueError("AI output is not valid JSON")
 
-        # PAKSA BERSIHKAN DATA
+        # 3. PAKSA BERSIHKAN DATA DARI TANDA ; DAN |
         for key in data:
             if isinstance(data[key], str):
                 data[key] = data[key].replace(';', ' ')
