@@ -1,53 +1,27 @@
-# rule_parser.py
+# rule_parse.py (updated)
 
 import re
 from typing import Dict
 
 class RuleParser:
-    """Rule-based parser for drilling workover data (Improved)"""
+    """Rule-based parser for drilling workover data (Final Clean Version)"""
 
     def parse_row(self, row: str) -> Dict:
-        """Parse a single row using advanced Regex"""
-        
-        # 1. Ekstrak Waktu & Durasi (Menggunakan Regex yang lebih ketat)
+        # 1. Ekstrak Waktu
         waktu_mulai, waktu_akhir = self._extract_times(row)
+        
+        # 2. Ekstrak Durasi
         durasi_jam = self._extract_duration(row)
-
-        # 2. Ekstrak Interval/Kedalaman (Bagian Paling Kritis)
+        
+        # 3. Ekstrak Kedalaman (Prioritas tinggi)
         depth_interval = self._extract_depth_interval(row)
-
-        # 3. Ekstrak Kondisi/Hasil Utama (Mencari kata kunci khusus kondisi)
-        # Contoh: "Pekerjaan terhenti", "SAND PUMP NOT GO DOWN", "CLEAN", "FORMATION"
+        
+        # 4. Ekstrak Kondisi/Hasil (Prioritas sedang)
         condition_result = self._extract_condition(row)
 
-        # 4. Sisa teks adalah Deskripsi Peralatan
-        # Metode: Hapus waktu, durasi, kedalaman, & kondisi dari teks asli. Sisanya adalah peralatan.
-        equipment_description = row
-        
-        # Hapus waktu
-        time_pattern = r'\d{1,2}:\d{2}'
-        equipment_description = re.sub(time_pattern, '', equipment_description)
-        
-        # Hapus durasi (angka desimal + optional kata Jam)
-        equipment_description = re.sub(r'\s*\d+\.?\d*\s*(?:Jam|jam|hours?|hrs?)?', '', equipment_description)
-        
-        # Hapus string kedalaman yang sudah diekstrak (jika ketemu di tengah kalimat)
-        if depth_interval != "N/A":
-            # Hapus secara spesifik agar tidak menghapus kata lain yang mirip
-            escaped_depth = re.escape(depth_interval)
-            equipment_description = re.sub(escaped_depth, '', equipment_description)
-            
-        # Hapus kondisi yang sudah diekstrak
-        if condition_result != "N/A":
-            escaped_cond = re.escape(condition_result)
-            equipment_description = re.sub(escaped_cond, '', equipment_description)
-
-        # Bersihkan sisa spasi ganda & karakter yang tidak perlu
-        equipment_description = re.sub(r'\s{2,}', ' ', equipment_description).strip()
-        equipment_description = re.sub(r'^\s*[|,;.]\s*', '', equipment_description) # Buang delimiter di awal
-
-        if not equipment_description:
-            equipment_description = "N/A"
+        # 5. EKSTRAK DESKRIPSI (Metode Baru: Ambil Semua Sisa Teks dalam 1 Tempat)
+        # Kita tidak menghapus dengan replace, tapi mencari pola deskripsi di awal baris
+        equipment_description = self._extract_equipment_description(row, depth_interval, condition_result)
 
         return {
             "waktu_mulai": waktu_mulai,
@@ -59,67 +33,84 @@ class RuleParser:
         }
 
     def _extract_times(self, row: str) -> tuple:
-        """Extract start and end times (HH:MM)"""
         time_pattern = r'\b(\d{1,2}:\d{2})\b'
         times = re.findall(time_pattern, row)
         return (times[0] if len(times) > 0 else "N/A", 
                 times[1] if len(times) > 1 else "N/A")
 
     def _extract_duration(self, row: str) -> float:
-        """Extract duration (float) followed by 'jam' or decimal number"""
-        # Cari pola: "X.X jam", "X.0 jam", atau angka desimal di dekat waktu
         duration_pattern = r'(\d+\.?\d*)\s*(?:Jam|jam|hours?|hrs?)'
         match = re.search(duration_pattern, row, re.IGNORECASE)
-        
         if match:
             return float(match.group(1))
-        
-        # Fallback: cari angka desimal di baris (biasanya durasi)
         dec_pattern = r'\b(\d+\.\d+)\b'
         dec_match = re.search(dec_pattern, row)
         return float(dec_match.group(1)) if dec_match else 0.0
 
     def _extract_depth_interval(self, row: str) -> str:
-        """Extract the interval/kedalaman section specifically"""
-        # Pola Regex untuk Kedalaman/Interval:
-        # 1. F/ 611' TO 618'   (Menggunakan F/ dan TO)
-        # 2. @ 689'            (Menggunakan @)
-        # 3. 486' - 610'       (Menggunakan range dengan tanda -)
-        # 4. 23 FT SAND FILL... (Frasa kedalaman spesifik)
-        
         depth_patterns = [
-            r'F\/\s*\d+[\'"]?\s*TO\s*\d+[\'"]?',  # F/ 611' TO 618'
-            r'@\s*\d+[\'"]?\s*(?:FT|ft)?',       # @ 689'
-            r'\d+[\'"]?\s*-\s*\d+[\'"]?\s*(?:FT|ft)?', # 486' - 610'
-            r'\d+\s*FT\s+FILL',                  # 23 FT SAND FILL
-            r'TO\s*SAND\s*@\s*\d+',              # TOS @ 618'
-            r'INTERVAL\s*:\s*[\d\s\'"-]+'        # INTVL : 486' - 610'
+            r'F\/\s*\d+[\'"]?\s*TO\s*\d+[\'"]?',  
+            r'@\s*\d+[\'"]?\s*(?:FT|ft)?',       
+            r'\d+[\'"]?\s*-\s*\d+[\'"]?\s*(?:FT|ft)?', 
+            r'\d+\s*FT\s+FILL',                  
+            r'TO\s*SAND\s*@\s*\d+',              
+            r'INTERVAL\s*:\s*[\d\s\'"-]+'        
         ]
-        
         for pattern in depth_patterns:
             match = re.search(pattern, row, re.IGNORECASE)
             if match:
                 return match.group(0).strip()
-                
         return "N/A"
 
     def _extract_condition(self, row: str) -> str:
-        """Extract specific condition/result statements"""
-        condition_keywords = [
-            r'PEKERJAAN TERHENTI.*',
+        # Pola kondisi yang jelas
+        condition_patterns = [
+            r'PEKERJAAN TERHENTI',
             r'SAND PUMP NOT GO DOWN',
             r'NOT GO DOWN',
             r'MUD & SAND FORMATION',
-            r'CLEAN',
             r'RE RUN',
+            r'CLEAN',
             r'WATER\s*:\s*\d+%\s*,\s*OIL\s*:\s*\d+%\s*,\s*SEDIMENT\s*:\s*\d+%',
             r'IFL\s*:.*BBLS'
         ]
-        
-        for pattern in condition_keywords:
+        for pattern in condition_patterns:
             match = re.search(pattern, row, re.IGNORECASE)
             if match:
                 return match.group(0).strip()
                 
+        # Jika ada kalimat perintah yang jelas (dimulai dengan TO, atau REPORTED), anggap sebagai kondisi awal
+        report_pattern = r'(REPORTED TO .*?)(?:\.|\s+AND|\s+W/)'
+        report_match = re.search(report_pattern, row, re.IGNORECASE)
+        if report_match:
+            return report_match.group(1).strip()
+            
         return "N/A"
-        return equipment, depth, condition
+
+    def _extract_equipment_description(self, row: str, depth_str: str, condition_str: str) -> str:
+        # STRATEGI BARU: Copy full text, lalu kita pangkas berdasarkan posisi kata kunci
+        clean_desc = row.strip()
+
+        # 1. Hapus waktu awal-akhir
+        clean_desc = re.sub(r'\b\d{1,2}:\d{2}\b', '', clean_desc)
+        
+        # 2. Hapus durasi (beserta kata 'Jam' jika ada)
+        clean_desc = re.sub(r'\b\d+\.?\d*\s*(?:Jam|jam|hours?|hrs?)\b', '', clean_desc)
+
+        # 3. Hapus string kedalaman yang sudah diambil (hanya hapersis jika ada di tengah kalimat)
+        if depth_str != "N/A":
+            # Gunakan batas kata (\b) agar tidak salah hapus.
+            escaped = re.escape(depth_str)
+            clean_desc = re.sub(r'\s*' + escaped + r'\s*', ' ', clean_desc)
+
+        # 4. Hapus string kondisi yang sudah diambil
+        if condition_str != "N/A":
+            escaped_cond = re.escape(condition_str)
+            clean_desc = re.sub(r'\s*' + escaped_cond + r'\s*', ' ', clean_desc)
+
+        # 5. Pembersihan Karakter Kotor (Hapus sisa titik koma, pipe, koma di awal/akhir kalimat)
+        clean_desc = re.sub(r'^[;\|,\s]+', '', clean_desc)   # Hapus pemisah di AWAL
+        clean_desc = re.sub(r'[;\|,\s]+$', '', clean_desc)   # Hapus pemisah di AKHIR
+        clean_desc = re.sub(r'\s{2,}', ' ', clean_desc)      # Ubah double space jadi single space
+        
+        return clean_desc if clean_desc.strip() else "N/A"
