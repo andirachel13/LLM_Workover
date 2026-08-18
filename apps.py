@@ -1,9 +1,11 @@
-# app.py (updated features)
+# app.py
+
 import streamlit as st
 import os
 import pandas as pd
 import re
 from typing import Dict
+from datetime import datetime, timedelta
 from config import Config
 from data_processor import DataProcessor
 from analytics import DataAnalyzer
@@ -58,6 +60,31 @@ def detect_anomalies(row: Dict) -> Dict:
     row['anomalies'] = "; ".join(anomalies) if anomalies else "Tidak Ada"
     return row
 
+def calculate_end_time(start_time_str: str, duration_hours: float) -> str:
+    """Menghitung waktu akhir berdasarkan waktu mulai dan durasi"""
+    try:
+        # Parse waktu mulai (format HH:MM)
+        start_parts = start_time_str.split(':')
+        start_hour = int(start_parts[0])
+        start_minute = int(start_parts[1]) if len(start_parts) > 1 else 0
+        
+        # Konversi durasi desimal ke jam dan menit
+        total_minutes = duration_hours * 60
+        add_hours = int(total_minutes // 60)
+        add_minutes = int(total_minutes % 60)
+        
+        # Hitung total menit dari waktu mulai
+        total_start_minutes = (start_hour * 60) + start_minute
+        total_end_minutes = total_start_minutes + (add_hours * 60) + add_minutes
+        
+        # Konversi kembali ke HH:MM (akomodasi lintas hari / >24 jam)
+        end_hour = (total_end_minutes // 60) % 24
+        end_minute = total_end_minutes % 60
+        
+        return f"{end_hour:02d}:{end_minute:02d}"
+    except Exception:
+        return "N/A"
+
 def main():
     init_session()
     st.title("🛢️ DrillStruct AI")
@@ -69,15 +96,13 @@ def main():
         if not st.session_state.api_key and default_key:
             st.session_state.api_key = default_key
 
-        # --- PERBAIKAN UTAMA DI SINI ---
         api_key_input = st.text_input(
             "Kunci API Gemini:", 
             type="password", 
             value=st.session_state.api_key, 
             placeholder="AIzaSy...",
-            key="api_key_input"  # <--- TAMBAHKAN KEY UNIK INI
+            key="api_key_input"
         )
-        # ------------------------------
 
         if api_key_input != st.session_state.api_key:
             st.session_state.api_key = api_key_input
@@ -103,6 +128,13 @@ def main():
                     processed = processor.process_raw_data(raw_input)
                     
                     for row in processed:
+                        # KALKULASI ULANG WAKTU AKHIR
+                        if row.get('waktu_mulai') != 'N/A' and row.get('durasi_jam', 0) > 0:
+                            row['waktu_akhir'] = calculate_end_time(row['waktu_mulai'], row['durasi_jam'])
+                        else:
+                            row['waktu_akhir'] = 'N/A'
+                        
+                        # Tambahkan Fase dan Anomali
                         row['fase_pekerjaan'] = classify_phase(row.get('peralatan_deskripsi', ''))
                         row = detect_anomalies(row)
                         
