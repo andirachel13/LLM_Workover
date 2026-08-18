@@ -1,4 +1,4 @@
-# app.py
+# app.py (Updated Level 2)
 
 import streamlit as st
 import os
@@ -10,11 +10,13 @@ from config import Config
 from data_processor import DataProcessor
 from analytics import DataAnalyzer
 from csv_export import CSVExporter
+from visualizer import WellVisualizer  # <--- IMPOR MODUL BARU
 
 st.set_page_config(page_title="Drilling Workover Data Processor", layout="wide")
 
 def init_session():
     if "processed_data" not in st.session_state: st.session_state.processed_data = []
+    if "historical_data" not in st.session_state: st.session_state.historical_data = [] # Database sederhana
     if "raw_input" not in st.session_state: st.session_state.raw_input = ""
     if "api_key" not in st.session_state: st.session_state.api_key = ""
     if "use_ai" not in st.session_state: st.session_state.use_ai = True
@@ -61,7 +63,6 @@ def detect_anomalies(row: Dict) -> Dict:
     return row
 
 def calculate_end_time(start_time_str: str, duration_hours: float) -> str:
-    """Menghitung waktu akhir berdasarkan waktu mulai dan durasi"""
     try:
         start_parts = start_time_str.split(':')
         start_hour = int(start_parts[0])
@@ -84,7 +85,7 @@ def calculate_end_time(start_time_str: str, duration_hours: float) -> str:
 def main():
     init_session()
     st.title("🛢️ DrillStruct AI")
-    st.markdown("Pengolahan data workover berbasis AI & NLP")
+    st.markdown("Pengolahan data workover berbasis AI & NLP dengan Analitik Lanjutan")
 
     with st.sidebar:
         st.header("⚙️ Konfigurasi")
@@ -92,14 +93,7 @@ def main():
         if not st.session_state.api_key and default_key:
             st.session_state.api_key = default_key
 
-        api_key_input = st.text_input(
-            "Kunci API Gemini:", 
-            type="password", 
-            value=st.session_state.api_key, 
-            placeholder="AIzaSy...",
-            key="api_key_input"
-        )
-
+        api_key_input = st.text_input("Kunci API Gemini:", type="password", value=st.session_state.api_key, placeholder="AIzaSy...", key="api_key_input")
         if api_key_input != st.session_state.api_key:
             st.session_state.api_key = api_key_input
 
@@ -110,7 +104,7 @@ def main():
         st.header("📋 Format Input")
         st.code("06:00 10:00 4.0 TGSM TOPIC... F/ 611' TO 618' (SAND PUMP NOT GO DOWN)")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📥 Input Data", "📊 Tabel Hasil", "📈 Analisis", "💾 Ekspor"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📥 Input Data", "📊 Tabel Hasil", "📈 Dashboard Performa", "💾 Ekspor"])
 
     with tab1:
         st.subheader("Masukkan Data Workover")
@@ -154,72 +148,87 @@ def main():
             
             df = df.rename(columns=Config.COLUMN_MAPPING)
             
-            # Pembersihan karakter kotor
             for col in df.columns:
                 if col not in ["Durasi (Jam)", "Total Baris"]:
                     df[col] = df[col].astype(str).str.replace(';', ' ').str.replace('|', ' ').str.strip()
 
-            # --- PERBAIKAN UI DISINI ---
-            # Sembunyikan kolom 'anomalies' dari tampilan tabel dengan cara drop
             if 'anomalies' in df.columns:
                 df_display = df.drop(columns=['anomalies'])
             else:
                 df_display = df
 
-            # Tampilkan tabel tanpa kolom anomalies
-            st.dataframe(
-                df_display, 
-                use_container_width=True, 
-                height=500, 
-                hide_index=True,
-                column_config={
-                    "Kondisi Awal/Hasil Utama": st.column_config.TextColumn(
-                        "Kondisi / Hasil Operasi"
-                    )
-                }
-            )
+            st.dataframe(df_display, use_container_width=True, height=500, hide_index=True)
             
             c1, c2, c3, c4 = st.columns(4)
             with c1: st.metric("Total Baris", len(df))
             with c2: st.metric("Total Durasi (Jam)", f"{df['Durasi (Jam)'].sum():.1f}")
             with c3: st.metric("AI Digunakan", "Ya" if st.session_state.use_ai and st.session_state.api_key else "Tidak")
             
-            # Hitung anomali dan tampilkan di bawah tabel
             anomalies_count = len(df[df['anomalies'].astype(str) != "Tidak Ada"])
             with c4: st.metric("⚠️ Data Anomali", anomalies_count)
             
-            # Tampilkan WARNING jika ada anomali
             if anomalies_count > 0:
-                st.warning(f"Terdeteksi {anomalies_count} data dengan anomali. Periksa kembali data input Anda.")
+                st.warning(f"Terdeteksi {anomalies_count} data dengan anomali.")
         else:
             st.info("Belum ada data yang diproses.")
 
     with tab3:
-        st.subheader("Analisis Operasi")
+        st.subheader("📈 Dashboard Performa & Analitik Lanjutan")
         if st.session_state.processed_data:
-            analyzer = DataAnalyzer()
-            totals = analyzer.calculate_totals(st.session_state.processed_data)
-            efficiency = analyzer.analyze_efficiency(st.session_state.processed_data)
-
-            st.markdown("### 📊 Distribusi Jenis Operasi")
-            op_counts = totals.get("operation_counts", {})
-            cols = st.columns(len(op_counts) if op_counts else 1)
-            for i, (op, count) in enumerate(op_counts.items()):
-                with cols[i]: st.metric(label=op, value=count)
-
-            st.markdown("### ⚠️ Analisis Efisiensi")
-            if efficiency["long_operations"]:
-                st.warning(f"**Operasi Panjang**: {len(efficiency['long_operations'])} operasi > 4 jam")
-                for op in efficiency["long_operations"]:
-                    st.write(f"- Baris {op['row']}: {op['operation']} ({op['duration']} jam)")
+            visualizer = WellVisualizer()
+            
+            # 1. Metrik Kunci (Metrics Dashboard)
+            metrics = visualizer.create_metrics_dashboard(
+                st.session_state.processed_data, 
+                st.session_state.historical_data  # Bandingkan dengan data historis
+            )
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Jam Operasi", f"{metrics['total_duration']:.1f} jam")
+            with col2:
+                st.metric("🟢 Jam Produktif", f"{metrics['productive_hours']:.1f} jam")
+            with col3:
+                st.metric("🔴 NPT (Downtime)", f"{metrics['npt_hours']:.1f} jam ({metrics['npt_percentage']:.1f}%)")
+            with col4:
+                st.metric("Rig Up/Down Ratio", metrics['rig_up_down_ratio'])
+                
+            st.markdown("---")
+            
+            # 2. Prediksi Durasi (AI Forecasting)
+            st.subheader("🤖 Analisis Prediktif")
+            st.info(metrics['prediction'])
+            
+            # Simpan data saat ini ke historis untuk prediksi selanjutnya
+            if st.button("Simpan ke Database Historis"):
+                st.session_state.historical_data.extend(st.session_state.processed_data)
+                st.success("Data berhasil disimpan ke database historis!")
+                st.rerun()
+            
+            # 3. Visualisasi Peta Sumur (Well Schematic)
+            st.markdown("---")
+            st.subheader("🛢️ Peta Profil Sumur (Schematic)")
+            fig = visualizer.create_well_schematic(st.session_state.processed_data)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # 4. Analisis Downtime (NPT Analysis)
+            st.markdown("---")
+            st.subheader("⏳ Analisis Downtime")
+            
+            if metrics['npt_hours'] > 0:
+                st.warning(f"⚠️ **Total Downtime (NPT):** {metrics['npt_hours']:.1f} jam ({metrics['npt_percentage']:.1f}% dari total operasi).")
+                st.markdown("**Rekomendasi:**")
+                if metrics['npt_percentage'] > 20:
+                    st.error("🚨 NPT > 20%. Segera evaluasi penyebab (cari pola W/O / Stuck Pipe).")
+                elif metrics['npt_percentage'] > 10:
+                    st.warning("⚠️ NPT 10-20%. Optimalkan jadwal operasi untuk mengurangi waktu tunggu.")
+                else:
+                    st.success("✅ NPT < 10%. Efisiensi operasi sudah baik.")
             else:
-                st.success("Tidak ada operasi > 4 jam")
-
-            total_time = efficiency["productive_time"] + efficiency["waiting_time"]
-            if total_time > 0:
-                st.metric("Efisiensi Produktif", f"{(efficiency['productive_time'] / total_time) * 100:.1f}%")
+                st.success("Tidak ada Downtime (NPT) yang terdeteksi pada data ini.")
+                
         else:
-            st.info("Belum ada data untuk dianalisis.")
+            st.info("Belum ada data untuk dianalisis. Silakan proses data di tab Input Data.")
 
     with tab4:
         st.subheader("Ekspor Data")
@@ -227,6 +236,12 @@ def main():
             exporter = CSVExporter()
             csv_data, filename = exporter.export(st.session_state.processed_data)
             st.download_button(label="📥 Download CSV", data=csv_data, file_name=filename, mime="text/csv")
+            
+            # Ekspor ke Historis
+            st.markdown("---")
+            if st.session_state.historical_data:
+                hist_csv = pd.DataFrame(st.session_state.historical_data).to_csv(index=False)
+                st.download_button(label="📥 Download Database Historis", data=hist_csv, file_name="historical_database.csv", mime="text/csv")
         else:
             st.info("Belum ada data.")
 
