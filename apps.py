@@ -48,14 +48,14 @@ def detect_anomalies(row: Dict) -> Dict:
     desc = row.get('peralatan_deskripsi', '').upper()
     
     if durasi > 12.0 and kedalaman != 'N/A' and not any(k in desc for k in ['W/O', 'WAIT']):
-        anomalies.append("⚠️ Durasi panjang tanpa perubahan kedalaman")
+        anomalies.append("Durasi panjang tanpa perubahan kedalaman")
     
     if 'WATER' in desc or 'OIL' in desc:
         percents = re.findall(r'(\d+)%', desc)
         if percents:
             for p in percents:
-                if int(p) > 100: anomalies.append("⚠️ Persentase > 100%")
-                if int(p) < 0: anomalies.append("⚠️ Persentase negatif")
+                if int(p) > 100: anomalies.append("Persentase > 100%")
+                if int(p) < 0: anomalies.append("Persentase negatif")
                     
     row['anomalies'] = "; ".join(anomalies) if anomalies else "Tidak Ada"
     return row
@@ -63,21 +63,17 @@ def detect_anomalies(row: Dict) -> Dict:
 def calculate_end_time(start_time_str: str, duration_hours: float) -> str:
     """Menghitung waktu akhir berdasarkan waktu mulai dan durasi"""
     try:
-        # Parse waktu mulai (format HH:MM)
         start_parts = start_time_str.split(':')
         start_hour = int(start_parts[0])
         start_minute = int(start_parts[1]) if len(start_parts) > 1 else 0
         
-        # Konversi durasi desimal ke jam dan menit
         total_minutes = duration_hours * 60
         add_hours = int(total_minutes // 60)
         add_minutes = int(total_minutes % 60)
         
-        # Hitung total menit dari waktu mulai
         total_start_minutes = (start_hour * 60) + start_minute
         total_end_minutes = total_start_minutes + (add_hours * 60) + add_minutes
         
-        # Konversi kembali ke HH:MM (akomodasi lintas hari / >24 jam)
         end_hour = (total_end_minutes // 60) % 24
         end_minute = total_end_minutes % 60
         
@@ -128,13 +124,11 @@ def main():
                     processed = processor.process_raw_data(raw_input)
                     
                     for row in processed:
-                        # KALKULASI ULANG WAKTU AKHIR
                         if row.get('waktu_mulai') != 'N/A' and row.get('durasi_jam', 0) > 0:
                             row['waktu_akhir'] = calculate_end_time(row['waktu_mulai'], row['durasi_jam'])
                         else:
                             row['waktu_akhir'] = 'N/A'
                         
-                        # Tambahkan Fase dan Anomali
                         row['fase_pekerjaan'] = classify_phase(row.get('peralatan_deskripsi', ''))
                         row = detect_anomalies(row)
                         
@@ -160,19 +154,27 @@ def main():
             
             df = df.rename(columns=Config.COLUMN_MAPPING)
             
+            # Pembersihan karakter kotor
             for col in df.columns:
                 if col not in ["Durasi (Jam)", "Total Baris"]:
                     df[col] = df[col].astype(str).str.replace(';', ' ').str.replace('|', ' ').str.strip()
-            
+
+            # --- PERBAIKAN UI DISINI ---
+            # Sembunyikan kolom 'anomalies' dari tampilan tabel dengan cara drop
+            if 'anomalies' in df.columns:
+                df_display = df.drop(columns=['anomalies'])
+            else:
+                df_display = df
+
+            # Tampilkan tabel tanpa kolom anomalies
             st.dataframe(
-                df, 
+                df_display, 
                 use_container_width=True, 
                 height=500, 
                 hide_index=True,
                 column_config={
                     "Kondisi Awal/Hasil Utama": st.column_config.TextColumn(
-                        "Kondisi / Anomali",
-                        help="Jika ada tanda ⚠️, periksa data Anda"
+                        "Kondisi / Hasil Operasi"
                     )
                 }
             )
@@ -182,11 +184,13 @@ def main():
             with c2: st.metric("Total Durasi (Jam)", f"{df['Durasi (Jam)'].sum():.1f}")
             with c3: st.metric("AI Digunakan", "Ya" if st.session_state.use_ai and st.session_state.api_key else "Tidak")
             
+            # Hitung anomali dan tampilkan di bawah tabel
             anomalies_count = len(df[df['anomalies'].astype(str) != "Tidak Ada"])
             with c4: st.metric("⚠️ Data Anomali", anomalies_count)
             
+            # Tampilkan WARNING jika ada anomali
             if anomalies_count > 0:
-                st.warning(f"Terdeteksi {anomalies_count} data dengan anomali. Periksa kolom 'Kondisi Awal/Hasil Utama' untuk detailnya.")
+                st.warning(f"Terdeteksi {anomalies_count} data dengan anomali. Periksa kembali data input Anda.")
         else:
             st.info("Belum ada data yang diproses.")
 
